@@ -1,245 +1,395 @@
 import React, { useState } from 'react';
 import { useMockStore } from '../../hooks/useMockStore';
+import CustomSelect from '../../components/ui/Select';
 import { 
-  Shield, PlusCircle, LayoutGrid, Users, 
-  Dices, Percent, Radio, Coins
+  Users, DollarSign, ShieldAlert, Radio, Settings, 
+  MessageSquare, Sliders, Trophy, Plus, RefreshCw, 
+  AlertTriangle, CheckCircle2, TrendingUp, HelpCircle
 } from 'lucide-react';
 
 export default function OperatorDashboard() {
-  const { affiliates, activeMissions, addMission, webhookLogs } = useMockStore();
+  const { 
+    affiliates, activeMissions, leadsFrios, systemConfig, webhookLogs,
+    addMission, triggerWhatsAppAutomation, updateSystemConfig 
+  } = useMockStore();
 
-  // Estados locais para controlar o formulário de nova missão
-  const [title, setTitle] = useState('');
-  const [game, setGame] = useState('Fortune Tiger');
-  const [targetAmount, setTargetAmount] = useState('');
-  const [rewardXp, setRewardXp] = useState('');
-  const [successMessage, setSuccessMessage] = useState(false);
+  // Controle de Abas do Operador
+  const [activeTab, setActiveTab] = useState<'overview' | 'crm' | 'campaigns' | 'settings'>('overview');
 
-  // Calcula métricas globais da plataforma para o dono do cassino ver
-  const totalCpaPaid = affiliates.reduce((acc, aff) => acc + aff.cpaEarned, 0);
-  const totalRevSharePaid = affiliates.reduce((acc, aff) => acc + aff.revShareEarned, 0);
-  const totalPlayersCount = affiliates.reduce((acc, aff) => acc + aff.playersCount, 0);
+  // Estados para Criação de Missões
+  const [missionTitle, setMissionTitle] = useState('');
+  const [missionGame, setMissionGame] = useState('Fortune Tiger');
+  const [missionTarget, setMissionTarget] = useState('');
+  const [missionXp, setMissionXp] = useState('');
 
-  const handleSubmitMission = (e: React.FormEvent) => {
+  // Estados para Configurações do Sistema
+  const [inputCpa, setInputCpa] = useState(systemConfig.globalCpa.toString());
+  const [inputRevShare, setInputRevShare] = useState(systemConfig.baseRevShare.toString());
+  const [configSuccess, setConfigSuccess] = useState(false);
+
+  // Estado para template do WhatsApp CRM
+  const [whatsappTemplate, setWhatsappTemplate] = useState('bonus_deposit');
+
+  // Handlers
+  const handleCreateMission = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !targetAmount || !rewardXp) return;
-
-    // Envia a nova missão direto para o nosso cérebro centralizado
+    if (!missionTitle || !missionTarget || !missionXp) return;
+    
     addMission({
-      title,
-      game,
-      targetAmount: Number(targetAmount),
-      rewardXp: Number(rewardXp)
+      title: missionTitle,
+      game: missionGame,
+      targetAmount: Number(missionTarget),
+      rewardXp: Number(missionXp)
     });
 
-    // Limpa o formulário e exibe feedback visual
-    setTitle('');
-    setTargetAmount('');
-    setRewardXp('');
-    setSuccessMessage(true);
-    setTimeout(() => setSuccessMessage(false), 3000);
+    setMissionTitle('');
+    setMissionTarget('');
+    setMissionXp('');
   };
 
+  const handleUpdateConfig = (e: React.FormEvent) => {
+    e.preventDefault();
+    updateSystemConfig({
+      globalCpa: Number(inputCpa),
+      baseRevShare: Number(inputRevShare)
+    });
+    setConfigSuccess(true);
+    setTimeout(() => setConfigSuccess(false), 2000);
+  };
+
+  // Métricas Consolidadas baseadas no Estado Central
+  const totalPlayers = affiliates.reduce((acc, aff) => acc + aff.playersCount, 0);
+  const totalCpaPaid = affiliates.reduce((acc, aff) => acc + aff.cpaEarned, 0);
+  const totalRevsharePaid = affiliates.reduce((acc, aff) => acc + aff.revShareEarned, 0);
+  
+  // GGR Fake Estimado do Cassino (Volume jogado * margem retida)
+  const estimatedGgr = (totalCpaPaid + totalRevsharePaid) * 2.4; 
+
   return (
-    <div className="min-h-screen bg-[#07090e] text-gray-100 p-6 font-sans">
+    <div className="min-h-screen bg-[#060608] text-gray-100 flex font-sans">
       
-      {/* HEADER DO OPERADOR */}
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-gray-800 pb-6 mb-8 gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-cyan-400 mb-1">
-            <Shield size={14} /> Painel Administrativo do Cassino
+      {/* SIDEBAR DO OPERADOR */}
+      <aside className="w-64 bg-[#09090d] border-r border-gray-800/60 p-6 flex flex-col justify-between hidden md:flex">
+        <div className="space-y-8">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-red-600 to-amber-600 flex items-center justify-center font-black text-lg text-white shadow-lg shadow-red-500/20">
+              Ω
+            </div>
+            <div>
+              <span className="font-black text-md tracking-wider block text-white">HQ OPERADOR</span>
+              <span className="text-[10px] text-red-400 font-bold uppercase tracking-widest -mt-1 block">Casino Admin</span>
+            </div>
           </div>
-          <h1 className="text-3xl font-black bg-gradient-to-r from-white via-gray-300 to-gray-600 bg-clip-text text-transparent">
-            Backoffice CRM iGaming
-          </h1>
-          <p className="text-gray-400 text-sm mt-1">Gestão de metas de engajamento, comissões de afiliados e retenção.</p>
-        </div>
-      </header>
 
-      {/* MÉTRICAS GLOBAIS DO CASSINO */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="bg-[#0f121d] border border-gray-800/60 p-6 rounded-2xl">
-          <p className="text-xs font-bold tracking-wider text-gray-500 uppercase flex items-center gap-1.5">
-            <Coins size={14} className="text-cyan-400" /> CPA Total Distribuído
-          </p>
-          <h3 className="text-3xl font-black text-cyan-400 mt-2">R$ {totalCpaPaid.toFixed(2)}</h3>
-          <p className="text-[11px] text-gray-400 mt-1">Pago a parceiros por FTDs válidos</p>
+          <nav className="space-y-1">
+            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-3 mb-2">Visão Geral</p>
+            
+            <button
+              onClick={() => setActiveTab('overview')}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${activeTab === 'overview' ? 'bg-red-600 text-white shadow-md shadow-red-600/20' : 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.01]'}`}
+            >
+              <TrendingUp size={15} /> Painel de Receita
+            </button>
+
+            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-3 pt-4 mb-2">Retenção Ativa</p>
+
+            <button
+              onClick={() => setActiveTab('crm')}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${activeTab === 'crm' ? 'bg-red-600 text-white shadow-md shadow-red-600/20' : 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.01]'}`}
+            >
+              <MessageSquare size={15} /> Recuperação de Leads
+            </button>
+
+            <button
+              onClick={() => setActiveTab('campaigns')}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${activeTab === 'campaigns' ? 'bg-red-600 text-white shadow-md shadow-red-600/20' : 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.01]'}`}
+            >
+              <Trophy size={15} /> Campanhas (Gamify)
+            </button>
+
+            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-3 pt-4 mb-2">Governança</p>
+
+            <button
+              onClick={() => setActiveTab('settings')}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${activeTab === 'settings' ? 'bg-red-600 text-white shadow-md shadow-red-600/20' : 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.01]'}`}
+            >
+              <Sliders size={15} /> Regras e Comissões
+            </button>
+          </nav>
         </div>
 
-        <div className="bg-[#0f121d] border border-gray-800/60 p-6 rounded-2xl">
-          <p className="text-xs font-bold tracking-wider text-gray-500 uppercase flex items-center gap-1.5">
-            <Percent size={14} className="text-blue-400" /> RevShare Total Gerado
-          </p>
-          <h3 className="text-3xl font-black text-blue-400 mt-2">R$ {totalRevSharePaid.toFixed(2)}</h3>
-          <p className="text-[11px] text-gray-400 mt-1">Volume líquido dividido com a base</p>
+        <div className="p-3 bg-red-950/10 border border-red-900/30 rounded-xl flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-red-900/30 border border-red-500/30 flex items-center justify-center font-bold text-xs text-red-400">
+            ADM
+          </div>
+          <div>
+            <p className="text-xs font-bold text-white">Diretoria Executiva</p>
+            <span className="text-[10px] text-gray-500 block">Acesso Master</span>
+          </div>
         </div>
+      </aside>
 
-        <div className="bg-[#0f121d] border border-gray-800/60 p-6 rounded-2xl">
-          <p className="text-xs font-bold tracking-wider text-gray-500 uppercase flex items-center gap-1.5">
-            <Users size={14} className="text-indigo-400" /> Total de Jogadores no CRM
-          </p>
-          <h3 className="text-3xl font-black text-indigo-400 mt-2">{totalPlayersCount}</h3>
-          <p className="text-[11px] text-gray-400 mt-1">Usuários integrados via ID/WhatsApp</p>
-        </div>
-
-        <div className="bg-[#0f121d] border border-gray-800/60 p-6 rounded-2xl">
-          <p className="text-xs font-bold tracking-wider text-gray-500 uppercase flex items-center gap-1.5">
-            <LayoutGrid size={14} className="text-amber-400" /> Campanhas de Retenção
-          </p>
-          <h3 className="text-3xl font-black text-amber-400 mt-2">{activeMissions.length}</h3>
-          <p className="text-[11px] text-gray-400 mt-1">Desafios ativos injetados nos links</p>
-        </div>
-      </div>
-
-      {/* BLOCO DUPLO: CRIADOR DE MISSÕES E LISTAGEM DE PARCEIROS */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      {/* ÁREA CENTRAL DE CONTEÚDO */}
+      <main className="flex-1 p-6 md:p-8 overflow-y-auto max-h-screen space-y-6">
         
-        {/* COLUNA 1 & 2: FORMULÁRIO DO OPERADOR (GERADOR DE GAMIFICAÇÃO) */}
-        <div className="lg:col-span-2 space-y-8">
-          
-          <div className="bg-[#0f121d] border border-gray-800/60 rounded-2xl p-6">
-            <h2 className="text-xl font-bold flex items-center gap-2 text-amber-400">
-              <PlusCircle size={20} />
-              Criar Nova Missão de Retenção Cruzada
-            </h2>
-            <p className="text-xs text-gray-400 mt-1 mb-6">
-              Injete uma nova meta coletiva direto no ecossistema. Quando o volume acumulado de apostas dos jogadores de um afiliado bater o valor alvo, a base inteira dele ganha bônus e o afiliado sobe de nível.
-            </p>
+        {/* HEADER */}
+        <header className="border-b border-gray-800/50 pb-5">
+          <h1 className="text-2xl font-black text-white">Central do Operador</h1>
+          <p className="text-gray-400 text-xs mt-0.5">Controle financeiro da banca, automações de CRM e configuração de margens.</p>
+        </header>
 
-            <form onSubmit={handleSubmitMission} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Título do Desafio</label>
-                  <input 
-                    type="text" 
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="Ex: Torneio de Fim de Semana do Tigre" 
-                    className="w-full bg-black/40 border border-gray-800 rounded-xl px-4 py-3 text-sm focus:border-amber-500/50 outline-none transition-all text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Jogo Alvo (API)</label>
-                  <select 
-                    value={game}
-                    onChange={(e) => setGame(e.target.value)}
-                    className="w-full bg-black/40 border border-gray-800 rounded-xl px-4 py-3 text-sm focus:border-amber-500/50 outline-none transition-all text-gray-300"
-                  >
-                    <option value="Fortune Tiger">Fortune Tiger (Tigrinho)</option>
-                    <option value="Mines">Mines (Minas)</option>
-                    <option value="Aviator">Aviator (Aviãozinho)</option>
-                    <option value="Fortune Ox">Fortune Ox (Touro)</option>
-                  </select>
-                </div>
+        {/* ---------------- SESSÃO 1: PAINEL DE RECEITA ---------------- */}
+        {activeTab === 'overview' && (
+          <div className="space-y-6 animate-fadeIn">
+            {/* CARDS DE MONITORAMENTO MASTER */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+              <div className="bg-[#0c0c10] border border-gray-800/80 p-5 rounded-2xl">
+                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Faturamento GGR Estimado</p>
+                <h3 className="text-2xl font-black text-amber-400 mt-1">R$ {estimatedGgr.toFixed(2)}</h3>
+                <span className="text-[10px] text-gray-500 block mt-1">Margem retida líquida da casa</span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Volume Requerido de Rollover (R$)</label>
-                  <input 
-                    type="number" 
-                    value={targetAmount}
-                    onChange={(e) => setTargetAmount(e.target.value)}
-                    placeholder="Ex: 500" 
-                    className="w-full bg-black/40 border border-gray-800 rounded-xl px-4 py-3 text-sm focus:border-amber-500/50 outline-none transition-all text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 mb-1">Recompensa da Missão (XP para a Base)</label>
-                  <input 
-                    type="number" 
-                    value={rewardXp}
-                    onChange={(e) => setRewardXp(e.target.value)}
-                    placeholder="Ex: 100" 
-                    className="w-full bg-black/40 border border-gray-800 rounded-xl px-4 py-3 text-sm focus:border-amber-500/50 outline-none transition-all text-white"
-                  />
-                </div>
+              <div className="bg-[#0c0c10] border border-gray-800/80 p-5 rounded-2xl">
+                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Total Pago em CPA</p>
+                <h3 className="text-2xl font-black text-red-400 mt-1">R$ {totalCpaPaid.toFixed(2)}</h3>
+                <span className="text-[10px] text-gray-400 block mt-1">Custo por primeiro depósito</span>
               </div>
 
-              <div className="pt-2 flex items-center justify-between">
-                <button 
-                  type="submit"
-                  className="bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs uppercase tracking-wider px-6 py-3 rounded-xl transition-all shadow-lg shadow-amber-500/10"
-                >
-                  Disparar Campanha no CRM
+              <div className="bg-[#0c0c10] border border-gray-800/80 p-5 rounded-2xl">
+                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Total Pago em RevShare</p>
+                <h3 className="text-2xl font-black text-purple-400 mt-1">R$ {totalRevsharePaid.toFixed(2)}</h3>
+                <span className="text-[10px] text-gray-400 block mt-1">Divisão de perdas de usuários</span>
+              </div>
+
+              <div className="bg-[#0c0c10] border border-gray-800/80 p-5 rounded-2xl">
+                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Jogadores Cadastrados (Rede)</p>
+                <h3 className="text-2xl font-black text-blue-400 mt-1">{totalPlayers} usuários</h3>
+                <span className="text-[10px] text-emerald-400 font-semibold block mt-1">Média Saudável de LTV</span>
+              </div>
+            </div>
+
+            {/* PERFORMANCE DE AFILIADOS PARCEIROS */}
+            <div className="bg-[#0c0c10] border border-gray-800/80 rounded-2xl p-6">
+              <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider">Desempenho Comercial por Afiliado</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs text-gray-400">
+                  <thead className="bg-black/40 font-mono text-[10px] text-gray-500 uppercase">
+                    <tr>
+                      <th className="p-3">Afiliado</th>
+                      <th className="p-3">Código</th>
+                      <th className="p-3">Cliques ➔ FTD</th>
+                      <th className="p-3">CPA Liberado</th>
+                      <th className="p-3 text-right">RevShare Pago</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-900 text-gray-300">
+                    {affiliates.map(aff => (
+                      <tr key={aff.id} className="hover:bg-white/[0.01]">
+                        <td className="p-3 font-bold text-white">{aff.name}</td>
+                        <td className="p-3 font-mono text-gray-500">{aff.code}</td>
+                        <td className="p-3 font-mono">{aff.funnel.clicks} / <span className="text-emerald-400 font-bold">{aff.funnel.ftds}</span></td>
+                        <td className="p-3 font-mono text-red-400">R$ {aff.cpaEarned.toFixed(2)}</td>
+                        <td className="p-3 font-mono text-right text-purple-400">R$ {aff.revShareEarned.toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ---------------- SESSÃO 2: CRM & RECUPERAÇÃO DE LEADS ---------------- */}
+        {activeTab === 'crm' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fadeIn">
+            <div className="lg:col-span-2 bg-[#0c0c10] border border-gray-800/80 rounded-2xl p-6 space-y-6">
+              <div>
+                <h3 className="text-md font-bold text-white flex items-center gap-2"><MessageSquare size={16} className="text-red-400" /> Funil de Leads Frios (Aguardando Primeiro Depósito)</h3>
+                <p className="text-xs text-gray-500 mt-1">Estes usuários se cadastraram pelo link de algum afiliado, mas ainda não fizeram o FTD. Dispare gatilhos automáticos para convertê-los.</p>
+              </div>
+
+              {/* SELETOR DE TEMPLATE DE DISPARO */}
+              <div className="bg-black/30 border border-gray-900 rounded-xl p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <div>
+                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">1. Escolha a Estratégia do WhatsApp</span>
+                  <p className="text-xs text-gray-400 mt-0.5">Template injetável dinamicamente via API.</p>
+                </div>
+                <CustomSelect
+                  options={[
+                    { value: 'bonus_deposit', label: 'Bônus 200% no FTD' },
+                    { value: 'free_spins', label: '10 Rodadas Grátis no Tigrinho' },
+                    { value: 'scarcity_alert', label: 'Aviso: Conta Expirando em 24h' }
+                  ]}
+                  value={whatsappTemplate}
+                  onChange={(val) => setWhatsappTemplate(val)}
+                  className="w-full sm:w-64"
+                />
+              </div>
+
+              {/* LISTA DE LEADS INATIVOS */}
+              <div className="overflow-hidden border border-gray-900 rounded-xl">
+                <table className="w-full text-left text-xs text-gray-400">
+                  <thead className="bg-black/20 text-gray-500 font-mono text-[10px] uppercase">
+                    <tr>
+                      <th className="p-3">Lead</th>
+                      <th className="p-3">Contato</th>
+                      <th className="p-3">Inatividade</th>
+                      <th className="p-3 text-right">Ação Comercial</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-900 text-gray-300">
+                    {leadsFrios.map((lead) => (
+                      <tr key={lead.id} className="hover:bg-white/[0.01]">
+                        <td className="p-3 font-bold text-white">{lead.name}</td>
+                        <td className="p-3 font-mono text-gray-500">{lead.whatsapp}</td>
+                        <td className="p-3">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${lead.daysInactive > 5 ? 'bg-red-500/10 text-red-400' : 'bg-amber-500/10 text-amber-400'}`}>
+                            {lead.daysInactive} dias parado
+                          </span>
+                        </td>
+                        <td className="p-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => triggerWhatsAppAutomation(lead.id, whatsappTemplate)}
+                            className="bg-emerald-600 hover:bg-emerald-500 text-black font-bold text-[11px] px-3 py-1.5 rounded-lg transition-all"
+                          >
+                            Disparar Whats
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* LIVE SYSTEM LOGS FEED */}
+            <div className="bg-[#0b0b0e] border border-gray-900 rounded-2xl p-5 flex flex-col justify-between">
+              <div>
+                <h4 className="text-xs font-bold uppercase text-gray-500 tracking-wider flex items-center gap-2 mb-4"><Radio size={14} className="text-red-500 animate-pulse" /> Live CRM Trigger Feed</h4>
+                <div className="space-y-2 font-mono text-[10px] max-h-[340px] overflow-y-auto pr-1">
+                  {webhookLogs.map((log, i) => (
+                    <div key={i} className="p-2 bg-black/50 border border-gray-900 rounded-lg">
+                      <div className="flex justify-between text-gray-600 text-[9px] mb-0.5">
+                        <span>{log.time}</span>
+                        <span className="text-red-400 font-bold">{log.event}</span>
+                      </div>
+                      <p className="text-gray-400 leading-relaxed">{log.details}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ---------------- SESSÃO 3: CAMPANHAS GAMIFICADAS ---------------- */}
+        {activeTab === 'campaigns' && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fadeIn">
+            {/* CRIADOR DE CAMPANHAS */}
+            <div className="bg-[#0c0c10] border border-gray-800/80 rounded-2xl p-6 space-y-4">
+              <div>
+                <h3 className="text-md font-bold text-white flex items-center gap-2"><Trophy size={16} className="text-yellow-500" /> Nova Campanha de Retenção</h3>
+                <p className="text-xs text-gray-500 mt-1">Crie metas coletivas de apostas (Rollover) em jogos específicos. Quando a base atinge a meta, os afiliados ganham multiplicadores de XP.</p>
+              </div>
+
+              <form onSubmit={handleCreateMission} className="space-y-3 pt-2">
+                <div>
+                  <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Título da Campanha</label>
+                  <input type="text" placeholder="Ex: Corrida do Ouro no Tigre" value={missionTitle} onChange={(e) => setMissionTitle(e.target.value)} className="w-full bg-black border border-gray-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-red-500" />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Jogo Alvo</label>
+                    <select value={missionGame} onChange={(e) => setMissionGame(e.target.value)} className="w-full bg-black border border-gray-800 rounded-xl px-3 py-2 text-xs text-white outline-none">
+                      <option value="Fortune Tiger">Fortune Tiger</option>
+                      <option value="Mines">Mines</option>
+                      <option value="Aviator">Aviator</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Recompensa (XP)</label>
+                    <input type="number" placeholder="Ex: 100" value={missionXp} onChange={(e) => setMissionXp(e.target.value)} className="w-full bg-black border border-gray-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-red-500" />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Rollover Alvo da Base (R$)</label>
+                  <input type="number" placeholder="Ex: 5000" value={missionTarget} onChange={(e) => setMissionTarget(e.target.value)} className="w-full bg-black border border-gray-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-red-500" />
+                </div>
+
+                <button type="submit" className="w-full bg-red-600 hover:bg-red-500 text-white font-bold text-xs py-2.5 rounded-xl transition-all shadow-lg flex items-center justify-center gap-1">
+                  <Plus size={14} /> Ativar Campanha na API
                 </button>
+              </form>
+            </div>
 
-                {successMessage && (
-                  <span className="text-xs font-semibold text-emerald-400 animate-fade-in">
-                    ✓ Campanha publicada! Já está ativa nos links dos afiliados.
+            {/* CAMPANHAS EM EXECUÇÃO */}
+            <div className="lg:col-span-2 bg-[#0c0c10] border border-gray-800/80 rounded-2xl p-6">
+              <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider">Campanhas Ativas Monitoradas por Webhook</h3>
+              <div className="space-y-4">
+                {activeMissions.map((mission) => (
+                  <div key={mission.id} className="bg-black/30 border border-gray-900 rounded-xl p-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <h4 className="font-bold text-xs text-white">{mission.title}</h4>
+                        <span className="text-[9px] font-mono text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded font-bold uppercase mt-1 inline-block">{mission.game}</span>
+                      </div>
+                      <span className="text-[10px] text-gray-400 font-mono">Bônus: <span className="text-amber-400 font-bold">+{mission.rewardXp} XP</span></span>
+                    </div>
+                    <div className="flex justify-between text-[10px] text-gray-500 font-mono mt-3 mb-1">
+                      <span>Volume Processado</span>
+                      <span>R$ {mission.currentProgress} / R$ {mission.targetAmount}</span>
+                    </div>
+                    <div className="w-full bg-gray-900 h-1.5 rounded-full overflow-hidden">
+                      <div className="bg-red-500 h-full transition-all duration-300" style={{ width: `${(mission.currentProgress / mission.targetAmount) * 100}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ---------------- SESSÃO 4: REGRAS E GOVERNANÇA ---------------- */}
+        {activeTab === 'settings' && (
+          <div className="max-w-xl bg-[#0c0c10] border border-gray-800/80 rounded-2xl p-6 space-y-6 animate-fadeIn">
+            <div>
+              <h3 className="text-md font-bold text-white flex items-center gap-2"><Settings size={16} className="text-red-400" /> Regras de Negócio Globais</h3>
+              <p className="text-xs text-gray-500 mt-1">Configure o comportamento automático das comissões pagas para os afiliados ao redor da plataforma.</p>
+            </div>
+
+            <form onSubmit={handleUpdateConfig} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Taxa CPA Global Padrão (R$)</label>
+                  <input type="number" value={inputCpa} onChange={(e) => setInputCpa(e.target.value)} className="w-full bg-black border border-gray-800 rounded-xl px-4 py-2.5 text-xs text-white outline-none focus:border-red-500" />
+                  <span className="text-[9px] text-gray-600 font-mono mt-1 block">Valor pago por FTD qualificado</span>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-gray-400 uppercase block mb-1">RevShare Global Base (%)</label>
+                  <input type="number" value={inputRevShare} onChange={(e) => setInputRevShare(e.target.value)} className="w-full bg-black border border-gray-800 rounded-xl px-4 py-2.5 text-xs text-white outline-none focus:border-red-500" />
+                  <span className="text-[9px] text-gray-600 font-mono mt-1 block">Porcentagem das perdas líquidas</span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-2">
+                <button type="submit" className="bg-red-600 hover:bg-red-500 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition-all shadow-lg">
+                  Salvar Parâmetros
+                </button>
+                {configSuccess && (
+                  <span className="text-xs text-emerald-400 font-bold flex items-center gap-1 animate-pulse">
+                    <CheckCircle2 size={14} /> Atualizado com sucesso!
                   </span>
                 )}
               </div>
             </form>
           </div>
+        )}
 
-          {/* VISÃO GERAL DE PARCEIROS AFILIADOS */}
-          <div className="bg-[#0f121d] border border-gray-800/60 rounded-2xl p-6">
-            <h2 className="text-lg font-bold flex items-center gap-2 mb-4">
-              <Users size={18} className="text-cyan-400" />
-              Afiliados Cadastrados no Sistema
-            </h2>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs text-gray-400">
-                <thead className="bg-black/20 text-gray-500 uppercase font-mono tracking-wider">
-                  <tr>
-                    <th className="p-3 rounded-l-lg">Nome / Link</th>
-                    <th className="p-3">Nível VIP</th>
-                    <th className="p-3">RevShare Atual</th>
-                    <th className="p-3 rounded-r-lg text-right">Total Acumulado</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-800/50">
-                  {affiliates.map((aff) => (
-                    <tr key={aff.id} className="hover:bg-white/[0.02] transition-colors">
-                      <td className="p-3">
-                        <div className="font-bold text-white">{aff.name}</div>
-                        <div className="text-[10px] text-cyan-400 font-mono mt-0.5">?aff={aff.code}</div>
-                      </td>
-                      <td className="p-3">
-                        <span className="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded font-mono font-bold">
-                          LVL {aff.level}
-                        </span>
-                      </td>
-                      <td className="p-3 font-semibold text-gray-300">{aff.revShare}%</td>
-                      <td className="p-3 text-right font-bold text-emerald-400">
-                        R$ {(aff.cpaEarned + aff.revShareEarned).toFixed(2)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-        </div>
-
-        {/* COLUNA 3: MONITOR DE REQUISIÇÕES (WEBHOOKS) */}
-        <div className="bg-[#0a0c14] border border-gray-900 rounded-2xl p-6 flex flex-col justify-between">
-          <div>
-            <h2 className="text-sm font-bold uppercase tracking-widest text-gray-400 flex items-center gap-2 mb-4">
-              <Radio size={16} className="text-cyan-400 animate-pulse" />
-              Global Traffic Gateway
-            </h2>
-            <div className="space-y-3 font-mono text-[11px] max-h-[480px] overflow-y-auto pr-1">
-              {webhookLogs.map((log, i) => (
-                <div key={i} className="p-2.5 bg-black/50 border border-gray-900 rounded-lg">
-                  <div className="flex justify-between text-gray-500 font-sans mb-1">
-                    <span>{log.time}</span>
-                    <span className="text-cyan-400 font-bold">{log.event}</span>
-                  </div>
-                  <p className="text-gray-300 break-all">{log.details}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="mt-6 pt-4 border-t border-gray-900 text-[11px] text-gray-600 text-center font-mono">
-            SECURE WEBHOOK RECEIVER v1.0
-          </div>
-        </div>
-
-      </div>
-
+      </main>
     </div>
   );
 }

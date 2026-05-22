@@ -1,26 +1,29 @@
 import { create } from 'zustand';
 
-// Definição dos tipos para o TypeScript (Baseado no nosso schema do Drizzle)
+// --- INTERFACES DOS NOVOS DADOS ---
+
 export interface Affiliate {
   id: string;
   name: string;
-  code: string; // Código do link (?aff=...)
-  xp: number;
+  code: string;
   level: number;
-  revShare: number;
+  xp: number;
   cpaEarned: number;
   revShareEarned: number;
   playersCount: number;
-}
-
-export interface Player {
-  id: string;
-  whatsapp: string;
-  affiliateCode: string;
-  xp: number;
-  level: number;
-  totalDeposited: number;
-  totalBet: number;
+  revShare: number;
+  // Novos Campos Profissionais
+  funnel: {
+    clicks: number;
+    registrations: number;
+    ftds: number; // First Time Deposits (Novos Depositantes)
+    subDeposits: number; // Segundos/Terceiros depósitos
+  };
+  pixels: {
+    id: string;
+    platform: 'facebook' | 'tiktok' | 'google';
+    pixelId: string;
+  }[];
 }
 
 export interface Mission {
@@ -28,123 +31,238 @@ export interface Mission {
   title: string;
   game: string;
   targetAmount: number;
-  rewardXp: number;
   currentProgress: number;
-  isCompleted: boolean;
+  rewardXp: number;
 }
+
+export interface WebhookLog {
+  time: string;
+  event: string;
+  details: string;
+}
+
+export interface LeadFrio {
+  id: string;
+  whatsapp: string;
+  name: string;
+  registeredAt: string;
+  status: 'pending_deposit' | 'churned';
+  lastGamePlayed?: string;
+  daysInactive: number;
+}
+
+export interface SystemConfig {
+  globalCpa: number;
+  baseRevShare: number;
+  xpPerFtd: number;
+  xpPerBetPercent: number;
+}
+
+// --- INTERFACE DA MOCK STORE CENTRALIZADA ---
 
 interface MockStore {
   affiliates: Affiliate[];
-  players: Player[];
   activeMissions: Mission[];
-  webhookLogs: Array<{ time: string; event: string; details: string }>;
+  webhookLogs: WebhookLog[];
+  leadsFrios: LeadFrio[];
+  systemConfig: SystemConfig;
   
-  // Função que simula a chegada de um Webhook real do Cassino
-  simulateCasinoWebhook: (eventType: 'deposit_made' | 'bet_placed', payload: { whatsapp: string; amount: number; game?: string }) => void;
-  // Função para criar uma nova missão (Painel do Operador)
-  addMission: (mission: Omit<Mission, 'id' | 'currentProgress' | 'isCompleted'>) => void;
+  // Ações do Sistema
+  simulateCasinoWebhook: (type: 'deposit_made' | 'bet_placed' | 'new_registration' | 'click_tracked', data: any) => void;
+  addMission: (mission: Omit<Mission, 'id' | 'currentProgress'>) => void;
+  addPixel: (affiliateId: string, platform: 'facebook' | 'tiktok' | 'google', pixelId: string) => void;
+  removePixel: (affiliateId: string, pixelId: string) => void;
+  triggerWhatsAppAutomation: (leadId: string, template: string) => void;
+  updateSystemConfig: (config: Partial<SystemConfig>) => void;
 }
 
+// --- INSTÂNCIA DA STORE COM OS DADOS ENRIQUECIDOS ---
+
 export const useMockStore = create<MockStore>((set, get) => ({
-  // 1. Dados Iniciais Simulados (Mock Data)
+  // Estado Inicial Rico em Informações para Demonstração
   affiliates: [
-    { id: '1', name: 'Beto Influencer iGaming', code: 'beto777', xp: 450, level: 3, revShare: 30, cpaEarned: 1200, revShareEarned: 2450, playersCount: 142 },
-    { id: '2', name: 'Tipster do Telegram VIP', code: 'vipgreen', xp: 120, level: 1, revShare: 30, cpaEarned: 400, revShareEarned: 890, playersCount: 38 }
-  ],
-  
-  players: [
-    { id: 'p1', whatsapp: '+5513999999999', affiliateCode: 'beto777', xp: 20, level: 1, totalDeposited: 150, totalBet: 340 }
+    {
+      id: '1',
+      name: 'Beto Influencer Gaming',
+      code: 'BETOPRO',
+      level: 3,
+      xp: 340,
+      cpaEarned: 2450.00,
+      revShareEarned: 1200.00,
+      playersCount: 49,
+      revShare: 35,
+      funnel: {
+        clicks: 1420,
+        registrations: 280,
+        ftds: 49,
+        subDeposits: 112
+      },
+      pixels: [
+        { id: 'p1', platform: 'facebook', pixelId: '123456789012345' }
+      ]
+    }
   ],
 
   activeMissions: [
-    { id: 'm1', title: 'Desafio do Tigre Diário', game: 'Fortune Tiger', targetAmount: 100, rewardXp: 50, currentProgress: 40, isCompleted: false },
-    { id: 'm2', title: 'Explorador de Minas', game: 'Mines', targetAmount: 50, rewardXp: 30, currentProgress: 0, isCompleted: false }
+    { id: 'm1', title: 'Alavancagem de Fim de Semana', game: 'Fortune Tiger', targetAmount: 1000, currentProgress: 650, rewardXp: 150 },
+    { id: 'm2', title: 'Operação Mina de Ouro', game: 'Mines', targetAmount: 500, currentProgress: 120, rewardXp: 80 }
   ],
+
+  leadsFrios: [
+    { id: 'l1', name: 'Carlos Eduardo', whatsapp: '+55 (11) 98765-4321', registeredAt: '2026-05-18', status: 'pending_deposit', daysInactive: 4 },
+    { id: 'l2', name: 'Amanda Souza', whatsapp: '+55 (21) 99888-7766', registeredAt: '2026-05-15', status: 'pending_deposit', daysInactive: 7 },
+    { id: 'l3', name: 'Marcos Silva', whatsapp: '+55 (13) 99111-2233', registeredAt: '2026-04-20', status: 'churned', lastGamePlayed: 'Aviator', daysInactive: 32 }
+  ],
+
+  systemConfig: {
+    globalCpa: 50.00,
+    baseRevShare: 30,
+    xpPerFtd: 50,
+    xpPerBetPercent: 0.1 // 10% do valor apostado vira XP para a base coletiva
+  },
 
   webhookLogs: [
-    { time: '11:42', event: 'SISTEMA_INICIADO', details: 'Aguardando webhooks de apostas...' }
+    { time: new Date().toLocaleTimeString(), event: 'SYSTEM_BOOT', details: 'CRM Gateway de Gamificação inicializado com sucesso.' }
   ],
 
-  // 2. Lógica de Negócio Viva (Gamificação Cruzada)
-  simulateCasinoWebhook: (eventType, payload) => {
-    const timeNow = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  // --- LÓGICA CORE DO WEBHOOK GATEWAY (RODA TUDO EM TEMPO REAL) ---
+
+  simulateCasinoWebhook: (type, data) => {
+    const time = new Date().toLocaleTimeString();
     
     set((state) => {
-      // Clona os estados atuais para manipulação segura
-      let updatedPlayers = [...state.players];
-      let updatedMissions = [...state.activeMissions];
-      let updatedAffiliates = [...state.affiliates];
-      
-      // Encontra ou cria o jogador que disparou o evento
-      let player = updatedPlayers.find(p => p.whatsapp === payload.whatsapp);
-      if (!player) {
-        player = { id: 'p_' + Math.random(), whatsapp: payload.whatsapp, affiliateCode: 'beto777', xp: 0, level: 1, totalDeposited: 0, totalBet: 0 };
-        updatedPlayers.push(player);
-      }
-
+      // Clona os dados do estado para mutabilidade segura
+      const updatedAffiliates = [...state.affiliates];
+      const updatedMissions = [...state.activeMissions];
+      const currentConfig = state.systemConfig;
       let logDetails = '';
 
-      // FLUXO A: Se o jogador fez um depósito
-      if (eventType === 'deposit_made') {
-        player.totalDeposited += payload.amount;
-        logDetails = `Jogador ${player.whatsapp} depositou R$ ${payload.amount}`;
-        
-        // Dá comissão de CPA e XP para o Afiliado dele
-        const aff = updatedAffiliates.find(a => a.code === player?.affiliateCode);
-        if (aff) {
-          aff.cpaEarned += 50; // R$ 50 fixo de CPA por depósito simulação
-          aff.xp += 25;        // Afiliado ganha XP por trazer depósito
-          if (aff.xp >= aff.level * 200) { // Sistema simples de Level Up do afiliado
-            aff.level += 1;
-            aff.revShare += 2.5; // Sobe o RevShare automaticamente como recompensa!
-          }
-        }
+      // 1. Processa cliques no link do afiliado
+      if (type === 'click_tracked') {
+        updatedAffiliates[0].funnel.clicks += 1;
+        logDetails = `Click originado do link de afiliado. Total: ${updatedAffiliates[0].funnel.clicks}`;
       }
 
-      // FLUXO B: Se o jogador fez uma aposta
-      if (eventType === 'bet_placed') {
-        player.totalBet += payload.amount;
-        logDetails = `Aposta de R$ ${payload.amount} no jogo ${payload.game}`;
+      // 2. Processa novos cadastros na API do Cassino (Lead criado, aguardando FTD)
+      if (type === 'new_registration') {
+        updatedAffiliates[0].funnel.registrations += 1;
+        logDetails = `Novo usuário cadastrado via API: ${data.name || 'Lead Anônimo'} (${data.whatsapp})`;
         
-        // Atualiza as missões do jogador se for no jogo alvo
-        updatedMissions = updatedMissions.map(mission => {
-          if (!mission.isCompleted && mission.game === payload.game) {
-            const newProgress = mission.currentProgress + payload.amount;
-            const isNowCompleted = newProgress >= mission.targetAmount;
-            
-            if (isNowCompleted) {
-              player!.xp += mission.rewardXp; // Jogador ganha XP se completar missão
-              if (player!.xp >= player!.level * 100) {
-                player!.level += 1; // Level up do jogador
-              }
-            }
-            
-            return {
-              ...mission,
-              currentProgress: Math.min(newProgress, mission.targetAmount),
-              isCompleted: isNowCompleted
-            };
-          }
-          return mission;
+        // Injeta automaticamente na lista de Leads Frios do Operador para automação posterior
+        state.leadsFrios.unshift({
+          id: `l_${Math.random()}`,
+          name: data.name || 'Novo Lead',
+          whatsapp: data.whatsapp,
+          registeredAt: new Date().toISOString().split('T')[0],
+          status: 'pending_deposit',
+          daysInactive: 0
         });
       }
 
-      // Adiciona o log no painel de monitoramento
-      const newLog = { time: timeNow, event: eventType.toUpperCase(), details: logDetails };
+      // 3. Processa Primeiro Depósito (Gera CPA, Libera Pixels e dá XP)
+      if (type === 'deposit_made') {
+        updatedAffiliates[0].cpaEarned += currentConfig.globalCpa;
+        updatedAffiliates[0].playersCount += 1;
+        updatedAffiliates[0].funnel.ftds += 1;
+        updatedAffiliates[0].xp += currentConfig.xpPerFtd;
+        
+        logDetails = `FTD Identificado! Valor: R$ ${data.amount}. Comissão de CPA de R$ ${currentConfig.globalCpa} injetada para o parceiro. +${currentConfig.xpPerFtd} XP ganho.`;
+        
+        // Verifica se o afiliado bateu o teto de XP para subir de nível
+        if (updatedAffiliates[0].xp >= 600) {
+          updatedAffiliates[0].level += 1;
+          updatedAffiliates[0].xp = updatedAffiliates[0].xp - 600; // Mantém o resto
+        }
+      }
 
+      // 4. Processa Aposta (Gera RevShare e alimenta a barra de progresso da Missão)
+      if (type === 'bet_placed') {
+        const estornoRevshare = data.amount * (updatedAffiliates[0].revShare / 100);
+        updatedAffiliates[0].revShareEarned += estornoRevshare;
+        updatedAffiliates[0].funnel.subDeposits += 1;
+        
+        // Calcula ganho de XP Coletivo proporcional à aposta
+        const xpGanho = Math.ceil(data.amount * currentConfig.xpPerBetPercent);
+        updatedAffiliates[0].xp += xpGanho;
+
+        logDetails = `Aposta processada no jogo [${data.game}]. Valor: R$ ${data.amount}. RevShare gerado: R$ ${estornoRevshare.toFixed(2)}. +${xpGanho} XP adicionado ao progresso global.`;
+
+        // Alimenta o progresso de todas as missões que pertencem a esse jogo específico
+        updatedMissions.forEach(mission => {
+          if (mission.game === data.game && mission.currentProgress < mission.targetAmount) {
+            mission.currentProgress = Math.min(mission.targetAmount, mission.currentProgress + data.amount);
+          }
+        });
+      }
+
+      // Registra o log no topo da lista
+      const newLog = { time, event: type.toUpperCase(), details: logDetails };
       return {
-        players: updatedPlayers,
-        activeMissions: updatedMissions,
         affiliates: updatedAffiliates,
-        webhookLogs: [newLog, ...state.webhookLogs].slice(0, 10) // Mantém os 10 últimos logs
+        activeMissions: updatedMissions,
+        webhookLogs: [newLog, ...state.webhookLogs]
       };
     });
   },
 
+  // --- OUTRAS AÇÕES DO SISTEMA ---
+
   addMission: (mission) => set((state) => ({
     activeMissions: [
       ...state.activeMissions,
-      { ...mission, id: 'm_' + Math.random(), currentProgress: 0, isCompleted: false }
+      { ...mission, id: `m_${Math.random()}`, currentProgress: 0 }
+    ],
+    webhookLogs: [
+      { 
+        time: new Date().toLocaleTimeString(), 
+        event: 'CRM_CAMPAIGN_LAUNCH', 
+        details: `Nova campanha de retenção lançada para o jogo ${mission.game}. Alvo de Rollover: R$ ${mission.targetAmount}.`
+      },
+      ...state.webhookLogs
     ]
+  })),
+
+  addPixel: (affiliateId, platform, pixelId) => set((state) => {
+    const updatedAffiliates = state.affiliates.map(aff => {
+      if (aff.id === affiliateId) {
+        return {
+          ...aff,
+          pixels: [...aff.pixels, { id: `p_${Math.random()}`, platform, pixelId }]
+        };
+      }
+      return aff;
+    });
+    return { affiliates: updatedAffiliates };
+  }),
+
+  removePixel: (affiliateId, pixelId) => set((state) => {
+    const updatedAffiliates = state.affiliates.map(aff => {
+      if (aff.id === affiliateId) {
+        return {
+          ...aff,
+          pixels: aff.pixels.filter(p => p.id !== pixelId)
+        };
+      }
+      return aff;
+    });
+    return { affiliates: updatedAffiliates };
+  }),
+
+  triggerWhatsAppAutomation: (leadId, template) => set((state) => {
+    const lead = state.leadsFrios.find(l => l.id === leadId);
+    return {
+      webhookLogs: [
+        {
+          time: new Date().toLocaleTimeString(),
+          event: 'WA_CRM_DISPATCH',
+          details: `Mensagem enviada via WhatsApp API para ${lead?.name} (${lead?.whatsapp}). Template Utilizado: [${template}].`
+        },
+        ...state.webhookLogs
+      ]
+    };
+  }),
+
+  updateSystemConfig: (newConfig) => set((state) => ({
+    systemConfig: { ...state.systemConfig, ...newConfig }
   }))
 }));
