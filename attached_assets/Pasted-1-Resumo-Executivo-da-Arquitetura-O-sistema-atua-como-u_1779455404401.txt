@@ -1,0 +1,151 @@
+1. Resumo Executivo da Arquitetura
+O sistema atua como uma camada de Inteligência e Atribuição Agnóstica posicionada entre o operador do cassino (PAM), as redes sociais do afiliado e os canais de mensageria (WhatsApp/Telegram).
+
+O grande diferencial comercial está na Atribuição de Ponta a Ponta Livre de Fraudes:
+
+O lead inicia nas redes sociais do afiliado (Automação de DM).
+
+Passa por uma triagem regulatória de maioridade (+18/KYC preventivo) no WhatsApp Cloud API.
+
+É carimbado com um ID de rastreamento único via Cookie na Landing Page.
+
+Tem o vínculo consolidado no banco através do cruzamento do CPF/ID enviado pelo Webhook de cadastro do cassino (user_registered).
+
+A partir desse vínculo, o motor processa eventos de entrada em tempo real, calculando comissões dinâmicas automáticas para os afiliados (CPA/RevShare progressivo) e atualizando o motor de engajamento (XP, Níveis e Missões) para os apostadores.
+
+2. Modelagem do Banco de Dados Relacional (PostgreSQL)
+Para suportar as regras de negócio cruzadas e manter a integridade referencial, precisamos de uma estrutura relacional sólida. Abaixo está a arquitetura conceitual das tabelas:
+
+SQL
+-- 1. OPERADORES (Tenants do SaaS)
+CREATE TABLE operators (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    brand_name VARCHAR(100) NOT NULL,
+    company_name VARCHAR(150) NOT NULL,
+    api_secret_key VARCHAR(255) UNIQUE NOT NULL, -- Chave para validar webhooks do PAM
+    global_cpa_rate DECIMAL(10, 2) DEFAULT 50.00,
+    global_revshare_rate DECIMAL(5, 2) DEFAULT 30.00,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 2. AFILIADOS (Parceiros de Marketing)
+CREATE TABLE affiliates (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    operator_id UUID REFERENCES operators(id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL,
+    email VARCHAR(150) UNIQUE NOT NULL,
+    affiliate_code VARCHAR(30) UNIQUE NOT NULL, -- Usado na URL (?aff=...)
+    current_level INT DEFAULT 1,
+    current_xp INT DEFAULT 0,
+    cpa_tier_rate DECIMAL(10, 2), -- Nível customizado se houver
+    revshare_tier_rate DECIMAL(5, 2),
+    instagram_username VARCHAR(50),
+    whatsapp_number VARCHAR(20),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 3. APOSTADORES / JOGADORES (Usuários Finais)
+CREATE TABLE players (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    operator_id UUID REFERENCES operators(id) ON DELETE CASCADE,
+    affiliate_id UUID REFERENCES affiliates(id) ON DELETE SET NULL, -- Vinculo imutável após atribuição
+    casino_player_id VARCHAR(100) NOT NULL, -- ID vindo do Webhook do Cassino externo
+    cpf VARCHAR(14) UNIQUE, -- Chave de checagem KYC do cassino
+    whatsapp_id VARCHAR(50), -- Capturado na triagem do bot do WhatsApp
+    telegram_id VARCHAR(50), -- Capturado se entrar no grupo VIP
+    current_level INT DEFAULT 1,
+    current_xp INT DEFAULT 0,
+    wallet_points INT DEFAULT 0, -- Moeda da loja de prêmios
+    is_active_vip BOOLEAN DEFAULT TRUE,
+    kyc_consented_at TIMESTAMP, -- Registro do botão [+18] do WhatsApp
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(operator_id, casino_player_id)
+);
+
+-- 4. MISSÕES (Configurador de Gamificação)
+CREATE TABLE missions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    operator_id UUID REFERENCES operators(id) ON DELETE CASCADE,
+    target_audience VARCHAR(20) CHECK (target_audience IN ('PLAYER', 'AFFILIATE')),
+    title VARCHAR(150) NOT NULL,
+    game_scope VARCHAR(50) DEFAULT 'ALL', -- 'Fortune Tiger', 'Mines', etc.
+    event_type VARCHAR(30) NOT NULL, -- 'bet_placed', 'deposit_made', 'ftd_count'
+    target_amount DECIMAL(12, 2) NOT NULL, -- R$ Acumulado ou contagem
+    reward_xp INT NOT NULL,
+    reward_points INT DEFAULT 0,
+    is_active BOOLEAN DEFAULT TRUE,
+    expires_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 5. PROGRESSO DE MISSÕES (Rastreamento Individual)
+CREATE TABLE player_mission_progress (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    player_id UUID REFERENCES players(id) ON DELETE CASCADE,
+    mission_id UUID REFERENCES missions(id) ON DELETE CASCADE,
+    current_progress DECIMAL(12, 2) DEFAULT 0.00,
+    is_completed BOOLEAN DEFAULT FALSE,
+    completed_at TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(player_id, mission_id)
+);
+
+-- 6. COMISSÕES (Extrato Financeiro do Afiliado)
+CREATE TABLE commissions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    affiliate_id UUID REFERENCES affiliates(id) ON DELETE CASCADE,
+    player_id UUID REFERENCES players(id) ON DELETE SET NULL,
+    type VARCHAR(15) CHECK (type IN ('CPA', 'REVSHARE', 'SUB_AFFILIATE')),
+    amount_generated DECIMAL(12, 2) NOT NULL, -- R$ Comissão ganha
+    reference_value DECIMAL(12, 2), -- Valor do depósito ou da aposta geradora
+    status VARCHAR(20) DEFAULT 'PENDING', -- 'PENDING', 'PAID', 'AUDITING'
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 7. LOGS DE WEBHOOKS (Trilha de Auditoria e Depuração)
+CREATE TABLE webhook_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    operator_id UUID REFERENCES operators(id),
+    event_type VARCHAR(50) NOT NULL, -- 'bet_placed', 'deposit_made'
+    raw_payload JSONB NOT NULL,
+    processed_status VARCHAR(20) NOT NULL, -- 'SUCCESS', 'FAILED', 'IGNORED'
+    error_message TEXT,
+    processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+3. Fluxo Lógico de Execução: Evento bet_placed
+Quando um apostador faz um clique de rodada de R$ 10,00 no Fortune Tiger, a esteira reativa opera em paralelo de acordo com o seguinte pipeline lógico:
+
+[Cassino Externo (PAM)] 
+       │
+       ▼ (Via HTTPS POST)
+[Endpoint de Entrada: /api/v1/webhooks/casino]
+       │
+       ├── 1. Validação: Checa assinatura HMAC com a 'api_secret_key' do Operador.
+       ├── 2. Persistência: Grava na tabela 'webhook_logs' com status 'PENDING'.
+       │
+       ▼ (Motor de Atribuição e Busca)
+ 🔍 Localiza o 'player_id' interno associando 'casino_player_id' + 'operator_id'.
+       │
+       ├───► FLUXO A: GAMIFICAÇÃO DO JOGADOR (Retenção)
+       │      │
+       │      ├── 1. Localiza missões ativas para o tipo 'bet_placed' e escopo 'Fortune Tiger'.
+       │      ├── 2. Incrementa o 'current_progress' na tabela 'player_mission_progress' em +R$ 10,00.
+       │      │
+       │      └── Se o progresso atingiu o 'target_amount' da missão:
+       │             ├── Marca 'is_completed' = TRUE.
+       │             ├── Incrementa o 'current_xp' e 'wallet_points' no registro do Player.
+       │             └── 🚀 GATILHO DE SAÍDA: Envia comando para a fila do WhatsApp Cloud API:
+       │                 "Parabéns! Você completou a missão 'Caçador do Tigre' e ganhou +50 XP!"
+       │
+       └───► FLUXO B: GAMIFICAÇÃO DO AFILIADO (Cálculo de Margem)
+              │
+              ├── 1. Identifica o 'affiliate_id' vinculado àquele jogador.
+              ├── 2. Se a aposta resultou em perda (processado no 'bet_settled' subsequente), 
+              │      calcula a porcentagem líquida com base no 'revshare_tier_rate' ativo do afiliado.
+              └── 3. Grava o lançamento positivo na tabela 'commissions' atualizando o saldo do parceiro.
+Próximos Passos Comerciais e de Código
+Agora que a fundação e a lógica de negócios estão alinhadas com precisão milimétrica ao escopo corporativo:
+
+Modificaremos a tela do Operador (src/pages/operator/Dashboard.tsx) para refletir o gerenciamento real de Afiliados, Aprovação de Saques/Comissões, Criação de Missões de Retenção e o controle de Leads Frios com Templates de WhatsApp.
+
+Criaremos a infraestrutura do Mock Store (src/hooks/useMockStore.ts) para espelhar perfeitamente esse banco relacional acima, permitindo simular o recebimento desses 4 payloads críticos de webhooks.
