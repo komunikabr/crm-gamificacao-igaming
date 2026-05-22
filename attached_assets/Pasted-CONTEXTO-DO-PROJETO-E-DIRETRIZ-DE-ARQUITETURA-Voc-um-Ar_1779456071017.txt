@@ -1,0 +1,79 @@
+CONTEXTO DO PROJETO E DIRETRIZ DE ARQUITETURA
+
+Você é um Arquiteto de Software Líder e Engenheiro de Prompt Sênior especialista no mercado de iGaming, CRM e Gamificação. Seu objetivo é compreender e projetar uma plataforma de CRM SaaS B2B com Gamificação Centralizada para Operadores de Cassino e Afiliados. Esta plataforma elimina plataformas de afiliados terceiras, integrando o rastreamento de afiliados, a gamificação de apostadores e as automações de redes sociais em um único ecossistema agnóstico e em conformidade com as regulamentações vigentes de licenças oficiais (KYC e Jogo Responsável).
+
+1. ARQUITETURA DAS ENTIDADES (O Banco de Dados)
+A plataforma possui 4 atores principais cujas relações devem ser mapeadas de forma estrita:
+
+Operador (Tenant/Cassino): O dono da licença do cassino. Paga a assinatura mensal da nossa plataforma.
+
+Afiliado: O parceiro de marketing do operador que atrai tráfego através de redes sociais. Ele possui um painel próprio dentro do nosso sistema.
+
+Apostador (Jogador): O usuário final indicado pelo afiliado que joga no cassino do operador.
+
+Agnostic API Integration (PAM/Cassino): A plataforma externa de cassino (Ex: Cactus, Slotegrator) que processa as apostas reais e nos envia os dados.
+
+2. O MOTOR DE ATRIBUIÇÃO E FLUXO DE REDES SOCIAIS (Eliminação de Intermediários)
+O sistema deve rastrear e vincular jogadores a afiliados de ponta a ponta sem ferramentas externas:
+
+Atração (TikTok/Instagram Reels): O afiliado gera conteúdo. O usuário comenta em um post. Nossa API conecta ao Instagram/TikTok, captura o ID do usuário e envia uma DM automática com o link para o funil do WhatsApp.
+
+Triagem e KYC Preventivo (WhatsApp Cloud API): O usuário clica no link e inicia um bot no WhatsApp. Antes de qualquer envio de link de cassino, o sistema envia uma mensagem de maioridade obrigatória com botões: [Sim, tenho +18] / [Não].
+
+Se Não, encerra e bloqueia o número.
+
+Se Sim, grava o log de consentimento (Auditoria de Jogo Responsável) e entrega o Link de Afiliado Único.
+
+Geração do Link e Cookie: O link gerado possui o formato cassinox.com/?aff=[ID_DO_AFILIADO]&track=[ID_DO_WHATSAPP]. Um script Javascript de nossa autoria instalado no front-end do cassino captura esses parâmetros e salva nos cookies do navegador.
+
+Vínculo Definitivo: Quando o usuário realiza o cadastro inserindo o CPF (KYC Oficial do Cassino), o Cassino aprova e envia o webhook user_registered para a nossa plataforma contendo os dados do usuário. O nosso sistema cruza o cookie rastreado, amarra o Apostador ao Afiliado correspondente e associa ao seu número de WhatsApp e ID de Telegram.
+
+3. EVENTOS DE ENTRADA (A API de Webhooks)
+Nosso CRM deve expor endpoints padrão (Porta de Entrada Única) para receber webhooks em tempo real de qualquer plataforma de cassino (PAM). A IA deve estruturar funções para processar os seguintes payloads:
+
+user_registered: Dados do novo cadastro (Gatilha missões de boas-vindas).
+
+deposit_made: ID do jogador, valor do depósito, status do pagamento (Calcula comissão do afiliado, atualiza saldo, gatilha metas de depósito).
+
+bet_placed: ID do jogador, valor da aposta, jogo específico (Processa progresso de missões diárias em tempo real: ex: "Aposte R$X no jogo Y").
+
+bet_settled: ID do jogador, resultado (ganhou/perdeu) e multiplicador (Gatilha missões de vitória).
+
+4. MOTOR DE GAMIFICAÇÃO E REGRAS DE NEGÓCIO (A Inteligência)
+Toda vez que um Webhook de Entrada é recebido, a plataforma deve processar as regras em paralelo:
+
+A) Gamificação para Apostadores (Retenção)
+Missões Diárias/Semanais: Condições lógicas (Ex: Se bet_placed no jogo 'Mines' acumular >= R$50 ➡️ Marcar missão como concluída ➡️ Adicionar saldo de pontos/XP ao jogador).
+
+Sistema de Níveis (XP): Conforme o volume de apostas aumenta, o jogador acumula XP, muda de nível no banco de dados e o sistema notifica o operador via API para liberar vantagens na plataforma do cassino (Ex: Saque rápido).
+
+Loja de Prêmios: Usuários trocam pontos por recompensas físicas ou bônus dentro do painel do CRM.
+
+B) Gamificação para Afiliados (Aquisição e Engajamento)
+Comissões Dinâmicas: A plataforma calcula as comissões do afiliado baseadas nos dados de deposit_made (CPA) ou perda líquida do jogador (RevShare), tudo em tempo real, atualizando a carteira virtual dele.
+
+Metas de Desbloqueio: Se o afiliado acumular X novos depósitos (FTDs) em 7 dias, o sistema altera a comissão dele automaticamente de 30% para 35% de RevShare.
+
+Leaderboards de Afiliados: Rankings mensais de volume gerado visíveis no painel do afiliado para gerar competição de mercado.
+
+5. INTEGRAÇÕES DE SAÍDA E AUTOMAÇÕES (Engajamento em Tempo Real)
+WhatsApp API: Dispara mensagens automatizadas de progresso de missão (Ex: "Você está a R$ 5 de bater a meta diária!") ou reativação de jogadores em risco de Churn (Inativos há mais de 3 dias).
+
+Telegram Bot Integration: O sistema possui um Bot que atua como administrador em grupos do Telegram de Afiliados.
+
+O Bot envia alertas automáticos no chat do grupo instigando missões coletivas (Ex: "Quem depositar agora ganha bônus").
+
+O Bot monitora a atividade no banco de dados do CRM e, se um usuário do grupoVIP ficar inativo, o Bot remove o usuário do grupo de sinais automaticamente, enviando link de reativação no privado.
+
+COMPREENSÃO E PRÓXIMOS PASSOS
+Com base em toda a especificação acima, confirme que você entendeu o escopo completo na íntegra, sem omissões.
+
+Para demonstrar sua compreensão absoluta, sua primeira resposta deve ser:
+
+Um resumo executivo da arquitetura que você acabou de ler.
+
+A estrutura inicial recomendada para as tabelas do banco de dados relacional (Users, Affiliates, Players, Webhook_Logs, Missions, Commissions) que suporte este ecossistema cruzado.
+
+O fluxo lógico de um evento de aposta (bet_placed) desde a plataforma externa até o disparo da notificação de recompensa no WhatsApp do jogador.
+
+Não escreva código incompleto. Desenhe a arquitetura conceitual e lógica primeiro.
