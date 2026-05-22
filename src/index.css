@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+/* Customizações de variáveis globais para o tema iGaming Premium.
+  Definimos uma base escura por padrão para dar o aspecto de Cassino.
+*/
+:root {
+  --background: #09090b;      /* Preto Ultra Escuro */
+  --foreground: #fafafa;      /* Texto claro */
+  --card: #111113;            /* Fundo dos Cards */
+  --border: #27272a;          /* Bordas discretas escuras */
+  --primary: #a855f7;         /* Roxo Neon Elétrico */
+  --accent: #22c55e;          /* Verde Esmeralda (Dinheiro) */
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Customização de Scrollbar Premium Escura */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--background);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary);
+}
